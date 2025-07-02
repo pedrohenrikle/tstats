@@ -33,7 +33,7 @@ It features a clean terminal user interface (TUI) with a progress indicator, and
 First, get the source code by cloning the repository:
 
 ```cmd
-git clone <your-repository-url>
+git clone https://github.com/pedrohenrikle/tstats
 cd tstats
 ```
 
