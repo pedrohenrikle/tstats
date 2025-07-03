@@ -157,7 +157,6 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.geoInfo = msg.geoInfo
 			m.weatherData = msg.weatherData
 
-			// Give Bubble Tea a moment to render the Printf before quitting.
 			quitCmd := tea.Tick(time.Millisecond*80, func(t time.Time) tea.Msg {
 				return tea.Quit()
 			})
@@ -167,12 +166,11 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				quitCmd,
 			)
 		}
-		// Cache miss, proceed to the next step
 		m.index++
 		progressCmd := m.progress.SetPercent(float64(m.index) / float64(len(m.steps)))
 		return m, tea.Batch(
 			progressCmd,
-			tea.Printf("%s Cache not found or invalid", checkMark),
+			tea.Printf("%s Cache not found or is stale", checkMark),
 			fetchPublicIPCmd(),
 		)
 
@@ -201,7 +199,6 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.done = true
 		progressCmd := m.progress.SetPercent(1.0)
 
-		// Give Bubble Tea a moment to render the final Printf before quitting.
 		quitCmd := tea.Tick(time.Millisecond*80, func(t time.Time) tea.Msg {
 			return tea.Quit()
 		})
@@ -238,7 +235,7 @@ func (m model) View() string {
 	}
 
 	if m.done {
-		cityStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("141")) // Light purple
+		cityStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("141"))
 		tempStyle := getTempColor(m.weatherData.Current.Temperature2m)
 
 		city := cityStyle.Render(m.geoInfo.City)
@@ -275,7 +272,21 @@ func checkCacheCmd(forceRefresh bool) tea.Cmd {
 			return cacheCheckResultMsg{hasCache: false}
 		}
 
-		// Check for GeoInfo cache
+		cacheTTL := 30 * time.Minute
+
+		// Check GeoInfo cache
+		geoFileInfo, err := os.Stat(geoCacheFile)
+		if err != nil || time.Since(geoFileInfo.ModTime()) > cacheTTL {
+			return cacheCheckResultMsg{hasCache: false}
+		}
+
+		// Check Weather cache
+		weatherFileInfo, err := os.Stat(weatherCacheFile)
+		if err != nil || time.Since(weatherFileInfo.ModTime()) > cacheTTL {
+			return cacheCheckResultMsg{hasCache: false}
+		}
+
+		// If caches are fresh, try to read and validate them
 		geoData, err := os.ReadFile(geoCacheFile)
 		if err != nil {
 			return cacheCheckResultMsg{hasCache: false}
@@ -285,7 +296,6 @@ func checkCacheCmd(forceRefresh bool) tea.Cmd {
 			return cacheCheckResultMsg{hasCache: false}
 		}
 
-		// Check for Weather cache
 		weatherData, err := os.ReadFile(weatherCacheFile)
 		if err != nil {
 			return cacheCheckResultMsg{hasCache: false}
@@ -295,7 +305,7 @@ func checkCacheCmd(forceRefresh bool) tea.Cmd {
 			return cacheCheckResultMsg{hasCache: false}
 		}
 
-		// If both caches are valid
+		// If both caches are fresh and valid
 		return cacheCheckResultMsg{
 			hasCache:    true,
 			geoInfo:     &geoInfo,
@@ -404,9 +414,7 @@ func main() {
 	flag.Parse()
 
 	if *clearCache {
-		// Create a faint style for the message
 		faintStyle := lipgloss.NewStyle().Faint(true)
-		// Render the message with the style and print it
 		fmt.Println(faintStyle.Render("Cache will be cleared on this run."))
 	}
 
